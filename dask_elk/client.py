@@ -20,6 +20,8 @@ class DaskElasticClient(object):
     :param str|None password: The password if X-pack is activated
     :param bool wan_only: If client should perform Node lookup. Set to True
             if ELK behind firewall or if nodes not accessed directly
+    :param bool | None translate_localhost: if True it let 'localhost', parameter
+            passed to client, to be replaceed by the node ip of the host.
     :param dict[str,T] client_kwargs: Arguments to pass to Elasticsearch
             client object created by client_klass
 
@@ -27,6 +29,7 @@ class DaskElasticClient(object):
 
     def __init__(self, host='localhost', port=9200, client_klass=Elasticsearch,
                  username=None, password=None, wan_only=False,
+                 translate_localhost = True,
                  **client_kwargs):
         """
         Constructor for DaskElasticClient object
@@ -39,6 +42,8 @@ class DaskElasticClient(object):
         :param str | None password: The password if X-pack is activated
         :param bool wan_only: If client should perform Node lookup. Set to True
                 if ELK behind firewall or if nodes not accessed directly
+        :param bool | None translate_localhost: if True it let 'localhost', parameter
+                passed to client, to be replaceed by the node ip of the host.
         :param dict[str, T] client_kwargs: Arguments to pass to Elasticsearch
                 client object created by client_klass
         """
@@ -48,6 +53,7 @@ class DaskElasticClient(object):
         self.__username = username
         self.__password = password
         self.__wan_only = wan_only
+        self.__translate_localhost = translate_localhost
         self.__client_args = self.__create_client_args(client_kwargs)
 
     @property
@@ -74,7 +80,7 @@ class DaskElasticClient(object):
     def wan_only(self):
         return self.__wan_only
 
-    def read(self, query=None, index=None, doc_type=None,
+    def read(self, query=None, index=None, doc_type='_doc',
              number_of_docs_per_partition=1000000, size=1000,
              fields_as_list=None,
              **kwargs):
@@ -200,6 +206,7 @@ class DaskElasticClient(object):
             slice_id=slice_id,
             slice_max=number_of_partitions,
             client_args=self.__client_args,
+            translate_localhost = self.__translate_localhost,
             **scan_arguments
         )
 

@@ -1,16 +1,17 @@
 import pandas as pd
 
 from dask import delayed
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.helpers import scan
 
 from dask_elk.parsers import DocumentParser
 
-
 class PartitionReader(object):
-    def __init__(self, index, shard, meta, node=None, doc_type='_doc',
+    def __init__(self, index, shard, meta, node=None,
+                 doc_type='_doc',
                  elastic_class=Elasticsearch, query=None,
                  slice_id=None, slice_max=1, scroll_size=1000,
+                 translate_localhost=True,
                  client_args=None, **kwargs):
         """
         Intantiate the PartitionReader object. PartitionReader contains the
@@ -32,6 +33,10 @@ class PartitionReader(object):
         request
         :param dict[str, T] | None client_args: Additional arguments to pass to
         client.
+        :param bool | None translate_localhost: if True it let 'localhost', parameter
+        passed to client, to be replaceed by the node ip of the host.
+        If you want to access to a docker hosted Elasticsearch from your browser, outside
+        of docker containers, you'll need to preserve 'localhost' as host (and maybe a proxy).
         :param dict[str, T] kwargs: Additional scan arguments to be passed to
         python's Elasticsearch search method.
         """
@@ -48,21 +53,33 @@ class PartitionReader(object):
         self.__scroll_size = scroll_size
         self.__client_args = client_args
         self.__additional_scan_args = kwargs
+        self.__translate_localhost = translate_localhost
+
 
     @delayed
     def read(self):
         client_args = {}
         if self.__client_args:
             client_args = self.__client_args.copy()
-        client_args['hosts'] = [
-                self.__node.publish_address if self.__node else
-                self.__shard.node.publish_address]
+        print('args1: \n', client_args['hosts'], self.__translate_localhost)
 
-        client = self.__elastic_class(**client_args)
+        if  'localhost' in client_args['hosts'] and self.__translate_localhost:
+            print(not 'localhost' in client_args['hosts'])
+            print('localhost' in client_args and self.__translate_localhost)
+            print('DENTRO')
+            client_args['hosts'] = [
+                    self.__node.publish_address if self.__node else
+                    self.__shard.node.publish_address
+            ]
+        
+        print(client_args)
+
+        client = self.__elastic_class(
+            **client_args, 
+        )
 
         if not self.__query:
             self.__query = {}
-
         scan_args = dict(index=self.__index.name,
                          doc_type=self.__doc_type,
                          preference='_shards:{}'.format(self.__shard.shard_id),
